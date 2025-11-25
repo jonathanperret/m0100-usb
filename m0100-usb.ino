@@ -4,19 +4,6 @@
    Revision: V1.0
    Purpose : Opto-mechanical trackball firmware
    --------------------------------------------------------------------------------
-   Wiring informations: Sparkfun Pro micro (Atmega32u4)
-   --------------------------------------------------------------------------------
-     - Red    : Gnd                          |   Pin: Gnd
-     - Orange : Vcc (+5V)                    |   Pin: Vcc
-     - Yellow : X axis encoder / channel A   |   Pin: PD3 - (INT0)
-     - Green  : X axis encoder / channel B   |   Pin: PD2 - (INT1)
-     - Blue   : Y axis encoder / channel A   |   Pin: PD0 - (INT2)
-     - Violet : Y axis encoder / channel B   |   Pin: PD1 - (INT3)
-     - Grey   : Switch 1                     |   Pin: PB3
-     - White  : Switch 2                     |   Pin: PB2
-     - Black  : Switch 3                     |   Pin: PB1
-   
-   --------------------------------------------------------------------------------
    Modified for use with Apple M0100 mouse
    By Johan Berglund, 2015-08-10
 
@@ -24,20 +11,37 @@
    - Internal pullup set for pin 14 (B3)
    - State check for right and middle buttons commented out
 
+   Ported to RP2040 Zero
+   By Jonathan Perret, 2025-11-25
+
+   Changes in code:
+   - update pin numbers
+   - use `digitalRead` instead of port manipulation
+   - add MOUSE_SPEED constant to speed up movement
+
    Connection to DB9:
    
-   DB9     Pro Micro
-    1       GND
-    2       VCC
-    3       GND
-    4       D0      (pin 3)
-    5       D1      (pin 2)
-    6       -       (not connected)
-    7       B3      (pin 14)
-    8       D3      (pin TXO)
-    9       D2      (pin RXI)
+   DB9     M0100 RP2040 Zero
+    1      GND   GND
+    2      5V    5V
+    3      GND   GND
+    4      X2    12
+    5      X1    13
+    6      -     -       (not connected)
+    7      SW    26
+    8      Y2    14
+    9      Y1    15
    
    ================================================================================ */
+#include <Mouse.h>
+
+const int PIN_SWITCH = 26;
+const int PIN_X1 = 13;
+const int PIN_X2 = 12;
+const int PIN_Y1 = 15;
+const int PIN_Y2 = 14;
+
+const int MOUSE_SPEED = 2;
 
 // =================================================================================
 // Type definition
@@ -66,13 +70,13 @@ void setup()
 {
 
   // Set pull-up for mouse switch on M0100
-  pinMode(14, INPUT_PULLUP);
+  pinMode(PIN_SWITCH, INPUT_PULLUP);
  
   // Attach interruption to encoders channels
-  attachInterrupt(0, ISR_HANDLER_X, CHANGE);
-  attachInterrupt(1, ISR_HANDLER_X, CHANGE);
-  attachInterrupt(2, ISR_HANDLER_Y, CHANGE);
-  attachInterrupt(3, ISR_HANDLER_Y, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_X1), ISR_HANDLER_X, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_X2), ISR_HANDLER_X, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_Y1), ISR_HANDLER_Y, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_Y2), ISR_HANDLER_Y, CHANGE);
  
   // Start the mouse function
   Mouse.begin();
@@ -86,16 +90,13 @@ void loop()
   // Update mouse coordinates
   if (xAxis.coordinate != 0 || yAxis.coordinate != 0)
   {
-    Mouse.move(xAxis.coordinate, yAxis.coordinate);
+    Mouse.move(MOUSE_SPEED * xAxis.coordinate, MOUSE_SPEED * yAxis.coordinate);
     xAxis.coordinate = 0;
     yAxis.coordinate = 0;
   }
 
   // Update buttons state
-  !(PINB & 0b1000) ? Mouse.press(MOUSE_LEFT)   : Mouse.release(MOUSE_LEFT);
-  // !(PINB & 0b0100) ? Mouse.press(MOUSE_RIGHT)  : Mouse.release(MOUSE_RIGHT);
-  // !(PINB & 0b0010) ? Mouse.press(MOUSE_MIDDLE) : Mouse.release(MOUSE_MIDDLE);
-
+  if (digitalRead(PIN_SWITCH) == LOW) Mouse.press(MOUSE_LEFT); else Mouse.release(MOUSE_LEFT);
 
   // Wait a little before next update
   delay(10);
@@ -107,13 +108,13 @@ void loop()
 void ISR_HANDLER_X()
 {
   // Build the LUT index from previous and new data
-  xAxis.index       = (xAxis.index << 2) | ((PIND & 0b0011) >> 0);
+  xAxis.index       = (xAxis.index << 2) | (digitalRead(PIN_X1) << 1) | digitalRead(PIN_X2);
   xAxis.coordinate += lookupTable[xAxis.index & 0b1111];
 }
 
 void ISR_HANDLER_Y()
 {
   // Build the LUT index from previous and new data
-  yAxis.index       = (yAxis.index << 2) | ((PIND & 0b1100) >> 2);
+  yAxis.index       = (yAxis.index << 2) | (digitalRead(PIN_Y1) << 1) | digitalRead(PIN_Y2);
   yAxis.coordinate += lookupTable[yAxis.index & 0b1111];
 }
