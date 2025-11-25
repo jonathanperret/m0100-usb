@@ -12,7 +12,7 @@
    - State check for right and middle buttons commented out
 
    Ported to RP2040 Zero
-   By Jonathan Perret, 2025-11-25
+   By Jonathan Perret (https://github.com/jonathanperret), 2025-11-25
 
    Changes in code:
    - update pin numbers
